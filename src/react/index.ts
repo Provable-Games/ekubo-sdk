@@ -38,3 +38,11 @@ export {
   type UseEkuboPriceHistoryResult,
   type UseEkuboPriceHistoryProps,
 } from "./useEkuboPriceHistory.js";
+
+export {
+  useEkuboQuotes,
+  type QuoteResult,
+  type QuotesMap,
+  type UseEkuboQuotesResult,
+  type UseEkuboQuotesProps,
+} from "./useEkuboQuotes.js";
