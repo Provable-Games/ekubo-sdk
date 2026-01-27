@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useEkubo } from '../hooks/useEkubo'
-import { MAINNET_TOKENS, createQuotePoller, type SwapQuote } from 'ekubo-sdk'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useEkuboSwap } from 'ekubo-sdk/react'
+import { MAINNET_TOKENS, type SwapQuote } from 'ekubo-sdk'
 
 interface QuoteUpdate {
   quote: SwapQuote
@@ -8,80 +8,57 @@ interface QuoteUpdate {
 }
 
 export function PollingExample() {
-  const ekubo = useEkubo()
   const [tokenFrom, setTokenFrom] = useState('ETH')
   const [tokenTo, setTokenTo] = useState('USDC')
   const [amount, setAmount] = useState('1')
   const [interval, setInterval] = useState('3000')
   const [isPolling, setIsPolling] = useState(false)
   const [quotes, setQuotes] = useState<QuoteUpdate[]>([])
-  const [error, setError] = useState<string | null>(null)
 
-  const pollerRef = useRef<ReturnType<typeof createQuotePoller> | null>(null)
-
-  const startPolling = useCallback(() => {
-    setError(null)
-    setQuotes([])
-
+  // Convert amount to wei
+  const amountWei = useMemo(() => {
     try {
-      const amountWei = BigInt(Math.floor(parseFloat(amount) * 1e18))
-      const sellTokenAddress = ekubo.resolveToken(tokenFrom)
-      const buyTokenAddress = ekubo.resolveToken(tokenTo)
-
-      pollerRef.current = createQuotePoller(
-        {
-          amount: amountWei,
-          tokenFrom: sellTokenAddress,
-          tokenTo: buyTokenAddress,
-        },
-        {
-          onQuote: (quote) => {
-            setQuotes((prev) => [
-              { quote, timestamp: new Date() },
-              ...prev.slice(0, 9), // Keep last 10 quotes
-            ])
-          },
-          onError: (err) => {
-            setError(err.message)
-          },
-          onStop: (reason) => {
-            if (reason === 'errors') {
-              setError('Polling stopped due to consecutive errors')
-            }
-            setIsPolling(false)
-          },
-        },
-        {
-          interval: parseInt(interval),
-          maxConsecutiveErrors: 5,
-        }
-      )
-
-      pollerRef.current.start()
-      setIsPolling(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start polling')
+      return BigInt(Math.floor(parseFloat(amount) * 1e18))
+    } catch {
+      return 0n
     }
-  }, [ekubo, tokenFrom, tokenTo, amount, interval])
+  }, [amount])
 
-  const stopPolling = useCallback(() => {
-    pollerRef.current?.stop()
-    pollerRef.current = null
-    setIsPolling(false)
-  }, [])
+  // Convert interval to number
+  const pollingInterval = useMemo(() => {
+    try {
+      return parseInt(interval)
+    } catch {
+      return 3000
+    }
+  }, [interval])
 
-  // Cleanup on unmount
+  // Use the swap hook with configurable polling
+  const { state } = useEkuboSwap({
+    sellToken: tokenFrom,
+    buyToken: tokenTo,
+    amount: amountWei,
+    enabled: isPolling && amountWei > 0n && tokenFrom !== tokenTo,
+    pollingInterval,
+  })
+
+  // Track quote changes
+  const prevQuoteRef = useRef<SwapQuote | null>(null)
+
   useEffect(() => {
-    return () => {
-      pollerRef.current?.stop()
+    if (state.quote && state.quote !== prevQuoteRef.current) {
+      prevQuoteRef.current = state.quote
+      setQuotes((prev) => [
+        { quote: state.quote!, timestamp: new Date() },
+        ...prev.slice(0, 9), // Keep last 10 quotes
+      ])
     }
-  }, [])
+  }, [state.quote])
 
-  // Stop polling when params change
+  // Clear quotes when params change
   useEffect(() => {
-    if (isPolling) {
-      stopPolling()
-    }
+    setQuotes([])
+    prevQuoteRef.current = null
   }, [tokenFrom, tokenTo, amount, interval])
 
   const formatAmount = (value: bigint, decimals: number = 18) => {
@@ -105,8 +82,8 @@ export function PollingExample() {
     <div className="card">
       <h2>Live Quote Polling</h2>
       <p>
-        Use the QuotePoller to get real-time quote updates. Useful for live swap
-        interfaces that need to keep quotes fresh.
+        The <code>useEkuboSwap</code> hook automatically polls for quote updates
+        at a configurable interval. No need for manual poller setup!
       </p>
 
       <div className="form-row">
@@ -169,17 +146,19 @@ export function PollingExample() {
 
       <div className="button-group">
         {!isPolling ? (
-          <button onClick={startPolling}>Start Polling</button>
+          <button onClick={() => setIsPolling(true)}>Start Polling</button>
         ) : (
-          <button onClick={stopPolling}>Stop Polling</button>
+          <button onClick={() => setIsPolling(false)}>Stop Polling</button>
         )}
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {state.error && <p className="error">{state.error.message}</p>}
+      {state.insufficientLiquidity && <p className="error">Insufficient liquidity</p>}
 
       {isPolling && (
         <p className="success" style={{ marginTop: '1rem' }}>
           Polling active - refreshing every {interval}ms
+          {state.loading && ' (fetching...)'}
         </p>
       )}
 
@@ -226,37 +205,38 @@ export function PollingExample() {
       <div style={{ marginTop: '1.5rem' }}>
         <h3>Code Example</h3>
         <pre style={{ background: '#2a2a2a', padding: '1rem', borderRadius: '8px', overflow: 'auto' }}>
-{`import { createQuotePoller } from 'ekubo-sdk'
+{`import { useEkuboSwap } from 'ekubo-sdk/react'
 
-const poller = createQuotePoller(
-  {
+function LiveQuote() {
+  const [isPolling, setIsPolling] = useState(true)
+
+  const { state } = useEkuboSwap({
+    sellToken: 'ETH',
+    buyToken: 'USDC',
     amount: BigInt(1e18), // 1 ETH
-    tokenFrom: '0x049d36...', // ETH address
-    tokenTo: '0x053c91...', // USDC address
-  },
-  {
-    onQuote: (quote) => {
-      console.log('New quote:', quote.total)
-      // Update your UI with the fresh quote
-    },
-    onError: (error) => {
-      console.error('Quote error:', error)
-    },
-    onStop: (reason) => {
-      console.log('Polling stopped:', reason)
-    },
-  },
-  {
-    interval: 3000, // Poll every 3 seconds
-    maxConsecutiveErrors: 5,
-  }
-)
+    enabled: isPolling,
+    pollingInterval: 3000, // Refresh every 3 seconds
+  })
 
-// Start polling
-poller.start()
+  return (
+    <div>
+      <button onClick={() => setIsPolling(!isPolling)}>
+        {isPolling ? 'Stop' : 'Start'} Polling
+      </button>
 
-// Later, stop polling
-poller.stop()`}
+      {state.loading && <p>Refreshing...</p>}
+
+      {state.quote && (
+        <p>
+          Current quote: {state.quote.total} USDC
+          (impact: {state.quote.impact}%)
+        </p>
+      )}
+
+      {state.error && <p>Error: {state.error.message}</p>}
+    </div>
+  )
+}`}
         </pre>
       </div>
     </div>

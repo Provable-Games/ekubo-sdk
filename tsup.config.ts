@@ -1,7 +1,10 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: {
+    index: "src/index.ts",
+    react: "src/react/index.ts",
+  },
   format: ["esm", "cjs"],
   dts: true,
   clean: true,
@@ -11,4 +14,8 @@ export default defineConfig({
   minify: false,
   target: "es2022",
   outDir: "dist",
+  external: ["react"],
+  esbuildOptions(options) {
+    options.jsx = "automatic";
+  },
 });

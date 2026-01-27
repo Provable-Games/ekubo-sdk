@@ -79,6 +79,191 @@ const { allCalls } = generateSwapCalls({
 });
 ```
 
+## React Hooks
+
+The SDK provides React hooks for easy integration with React applications.
+
+```bash
+npm install ekubo-sdk react
+```
+
+### EkuboProvider
+
+Wrap your app with `EkuboProvider` to share a single client instance:
+
+```tsx
+import { EkuboProvider } from '@provable-games/ekubo-sdk/react';
+
+function App() {
+  return (
+    <EkuboProvider config={{ chain: 'mainnet' }}>
+      <YourApp />
+    </EkuboProvider>
+  );
+}
+```
+
+### useEkuboSwap
+
+Fetch swap quotes with automatic polling:
+
+```tsx
+import { useEkuboSwap } from '@provable-games/ekubo-sdk/react';
+
+function SwapForm() {
+  const { state, generateCalls, refetch } = useEkuboSwap({
+    sellToken: 'ETH',
+    buyToken: 'USDC',
+    amount: 1000000000000000000n, // 1 ETH
+    pollingInterval: 5000, // Poll every 5 seconds
+  });
+
+  if (state.loading) return <div>Loading quote...</div>;
+  if (state.error) return <div>Error: {state.error.message}</div>;
+  if (state.insufficientLiquidity) return <div>Insufficient liquidity</div>;
+
+  const handleSwap = () => {
+    const calls = generateCalls(5n); // 5% slippage
+    if (calls) {
+      // Execute calls with your wallet
+    }
+  };
+
+  return (
+    <div>
+      <p>You will receive: {state.quote?.total}</p>
+      <p>Price impact: {state.priceImpact}%</p>
+      <button onClick={handleSwap}>Swap</button>
+    </div>
+  );
+}
+```
+
+### useEkuboPrices
+
+Fetch USD prices for multiple tokens:
+
+```tsx
+import { useEkuboPrices } from '@provable-games/ekubo-sdk/react';
+
+const ETH_ADDRESS = '0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7';
+const STRK_ADDRESS = '0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d';
+
+function TokenPrices() {
+  const { prices, isLoading, getPrice, isTokenAvailable } = useEkuboPrices({
+    tokens: [ETH_ADDRESS, STRK_ADDRESS],
+  });
+
+  if (isLoading) return <div>Loading prices...</div>;
+
+  return (
+    <div>
+      <p>ETH: ${isTokenAvailable(ETH_ADDRESS) ? getPrice(ETH_ADDRESS)?.toFixed(2) : 'N/A'}</p>
+      <p>STRK: ${isTokenAvailable(STRK_ADDRESS) ? getPrice(STRK_ADDRESS)?.toFixed(2) : 'N/A'}</p>
+    </div>
+  );
+}
+```
+
+### useEkuboTokens
+
+Fetch the list of available tokens:
+
+```tsx
+import { useEkuboTokens } from '@provable-games/ekubo-sdk/react';
+
+function TokenList() {
+  const { tokens, isLoading, getTokenBySymbol } = useEkuboTokens();
+
+  if (isLoading) return <div>Loading tokens...</div>;
+
+  const eth = getTokenBySymbol('ETH');
+
+  return (
+    <ul>
+      {tokens.map(token => (
+        <li key={token.address}>{token.symbol}: {token.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### useEkuboStats
+
+Fetch protocol statistics:
+
+```tsx
+import { useEkuboStats } from '@provable-games/ekubo-sdk/react';
+
+function ProtocolStats() {
+  const { tvl, volume, topPairs, isLoading } = useEkuboStats();
+
+  if (isLoading) return <div>Loading stats...</div>;
+
+  return (
+    <div>
+      {tvl && <p>TVL: ${tvl.total.toLocaleString()}</p>}
+      {volume && <p>24h Volume: ${volume.total.toLocaleString()}</p>}
+      <h3>Top Pairs</h3>
+      <ul>
+        {topPairs.slice(0, 5).map((pair, i) => (
+          <li key={i}>{pair.token0Symbol}/{pair.token1Symbol}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+### useEkuboPriceHistory
+
+Fetch historical price data:
+
+```tsx
+import { useEkuboPriceHistory } from '@provable-games/ekubo-sdk/react';
+
+function PriceChart() {
+  const { data, isLoading } = useEkuboPriceHistory({
+    token: 'ETH',
+    quoteToken: 'USDC',
+    interval: 3600, // 1 hour intervals
+  });
+
+  if (isLoading) return <div>Loading price history...</div>;
+
+  return (
+    <div>
+      {data.map((point) => (
+        <div key={point.timestamp}>
+          {new Date(point.timestamp * 1000).toLocaleDateString()}: ${point.price}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### Using Hooks Without Provider
+
+Hooks work without `EkuboProvider` by creating a singleton client:
+
+```tsx
+import { useEkuboSwap } from '@provable-games/ekubo-sdk/react';
+
+function SwapForm() {
+  // Works without EkuboProvider - uses default mainnet config
+  const { state } = useEkuboSwap({
+    sellToken: 'ETH',
+    buyToken: 'USDC',
+    amount: 1000000000000000000n,
+    config: { chain: 'mainnet' }, // Optional: customize the singleton
+  });
+
+  // ...
+}
+```
+
 ## Quote Polling
 
 For real-time quote updates:
@@ -307,6 +492,20 @@ try {
 | `generateSwapCalls(params)` | Generate swap calls |
 | `prepareSwapCalls(params)` | Generate calls with approval |
 | `resolveToken(identifier, registry?)` | Resolve token identifier |
+
+### React Hooks
+
+Import from `@provable-games/ekubo-sdk/react`:
+
+| Hook | Description |
+|------|-------------|
+| `EkuboProvider` | Context provider for sharing client |
+| `useEkuboClient()` | Access the client from context |
+| `useEkuboSwap(props)` | Swap quotes with polling |
+| `useEkuboPrices(props)` | USD prices for multiple tokens |
+| `useEkuboTokens(props)` | Fetch available tokens |
+| `useEkuboStats(props)` | Protocol TVL, volume, top pairs |
+| `useEkuboPriceHistory(props)` | Historical price data |
 
 ## Chain IDs
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useEkuboTokens } from 'ekubo-sdk/react'
 import {
   MAINNET_TOKENS,
   resolveTokenInfo,
@@ -10,6 +11,9 @@ export function TokensExample() {
   const [searchInput, setSearchInput] = useState('')
   const [resolvedToken, setResolvedToken] = useState<TokenInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Fetch tokens from the API using the hook
+  const { tokens: apiTokens, isLoading, error: fetchError, refetch } = useEkuboTokens()
 
   const handleResolve = () => {
     setError(null)
@@ -41,8 +45,8 @@ export function TokensExample() {
     <div className="card">
       <h2>Token Registry</h2>
       <p>
-        The SDK includes a built-in token registry for mainnet tokens. You can
-        resolve tokens by symbol or address.
+        The SDK includes a built-in token registry and the <code>useEkuboTokens</code> hook
+        for fetching tokens from the API.
       </p>
 
       <h3>Built-in Tokens</h3>
@@ -58,6 +62,37 @@ export function TokensExample() {
           </button>
         ))}
       </div>
+
+      <h3 style={{ marginTop: '1.5rem' }}>
+        API Tokens ({isLoading ? 'loading...' : apiTokens.length})
+        <button
+          onClick={refetch}
+          style={{ marginLeft: '1rem', fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}
+          disabled={isLoading}
+        >
+          Refresh
+        </button>
+      </h3>
+      {fetchError && <p className="error">{fetchError.message}</p>}
+      {!isLoading && apiTokens.length > 0 && (
+        <div className="token-list">
+          {apiTokens.slice(0, 20).map((token) => (
+            <button
+              key={token.address}
+              className="token-chip"
+              onClick={() => handleTokenClick(token.symbol)}
+              style={{ cursor: 'pointer', border: 'none' }}
+            >
+              {token.symbol}
+            </button>
+          ))}
+          {apiTokens.length > 20 && (
+            <span style={{ color: '#888', alignSelf: 'center' }}>
+              +{apiTokens.length - 20} more
+            </span>
+          )}
+        </div>
+      )}
 
       <h3 style={{ marginTop: '1.5rem' }}>Resolve Token</h3>
       <div className="form-row">
@@ -131,43 +166,37 @@ export function TokensExample() {
       <div style={{ marginTop: '1.5rem' }}>
         <h3>Code Example</h3>
         <pre style={{ background: '#2a2a2a', padding: '1rem', borderRadius: '8px', overflow: 'auto' }}>
-{`import {
-  MAINNET_TOKENS,
-  resolveToken,
-  resolveTokenInfo,
-  canResolveToken,
-  createTokenRegistry,
-} from 'ekubo-sdk'
+{`import { useEkuboTokens } from 'ekubo-sdk/react'
+import { resolveTokenInfo, canResolveToken } from 'ekubo-sdk'
 
-// List all built-in mainnet tokens
-console.log(MAINNET_TOKENS)
-// [{ symbol: 'ETH', address: '0x049d36...', decimals: 18 }, ...]
+function TokenList() {
+  // Fetch all tokens from the API
+  const { tokens, isLoading, getTokenBySymbol } = useEkuboTokens()
 
-// Resolve symbol to address (returns string)
-const ethAddress = resolveToken('ETH')
-console.log(ethAddress) // '0x049d36...'
+  if (isLoading) return <p>Loading tokens...</p>
 
-// Get full token info (returns TokenInfo | undefined)
-const eth = resolveTokenInfo('ETH')
-console.log(eth?.address) // '0x049d36...'
-console.log(eth?.decimals) // 18
+  // Get a specific token by symbol
+  const eth = getTokenBySymbol('ETH')
+  console.log(eth?.address) // '0x049d36...'
 
-// Resolve by address to get token info
-const token = resolveTokenInfo('0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7')
-console.log(token?.symbol) // 'ETH'
-
-// Check if token exists
-if (canResolveToken('MYTOKEN')) {
-  // Token is in registry
+  return (
+    <ul>
+      {tokens.map(token => (
+        <li key={token.address}>
+          {token.symbol}: {token.name}
+        </li>
+      ))}
+    </ul>
+  )
 }
 
-// Create custom registry with additional tokens
-const customRegistry = createTokenRegistry([
-  ...MAINNET_TOKENS,
-  { symbol: 'MYTOKEN', address: '0x...', decimals: 18 },
-])
+// You can also use the static registry functions
+const ethInfo = resolveTokenInfo('ETH')
+console.log(ethInfo?.decimals) // 18
 
-const myToken = resolveTokenInfo('MYTOKEN', customRegistry)`}
+if (canResolveToken('MYTOKEN')) {
+  // Token exists in registry
+}`}
         </pre>
       </div>
     </div>

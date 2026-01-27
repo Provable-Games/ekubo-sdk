@@ -1,6 +1,6 @@
 {
   "name": "@provable-games/ekubo-sdk",
-  "version": "0.1.6",
+  "version": "0.1.8",
   "description": "Standalone TypeScript SDK for Ekubo DEX routing and quotes on Starknet",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -15,6 +15,16 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
+      }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react.d.ts",
+        "default": "./dist/react.js"
+      },
+      "require": {
+        "types": "./dist/react.d.cts",
+        "default": "./dist/react.cjs"
       }
     }
   },
@@ -55,18 +65,24 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "@types/react": "^18.2.0",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
     "@vitest/coverage-v8": "^1.6.0",
     "eslint": "^8.57.0",
+    "react": "^18.2.0",
     "tsup": "^8.1.0",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0"
   },
   "peerDependencies": {
+    "react": ">=17.0.0",
     "starknet": ">=6.0.0"
   },
   "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
     "starknet": {
       "optional": true
     }

@@ -1,37 +1,31 @@
-import { useState } from 'react'
-import { useEkubo } from '../hooks/useEkubo'
-import { MAINNET_TOKENS, type SwapQuote } from 'ekubo-sdk'
+import { useState, useMemo } from 'react'
+import { useEkuboSwap } from 'ekubo-sdk/react'
+import { MAINNET_TOKENS } from 'ekubo-sdk'
 
 export function QuoteExample() {
-  const ekubo = useEkubo()
   const [tokenFrom, setTokenFrom] = useState('ETH')
   const [tokenTo, setTokenTo] = useState('USDC')
   const [amount, setAmount] = useState('0.1')
-  const [quote, setQuote] = useState<SwapQuote | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  const handleGetQuote = async () => {
-    setLoading(true)
-    setError(null)
-    setQuote(null)
-
+  // Convert amount to wei (assuming 18 decimals for simplicity)
+  const amountWei = useMemo(() => {
     try {
-      // Convert amount to wei (assuming 18 decimals for simplicity)
-      const amountWei = BigInt(Math.floor(parseFloat(amount) * 1e18))
-
-      const result = await ekubo.getQuote({
-        amount: amountWei,
-        tokenFrom,
-        tokenTo,
-      })
-
-      setQuote(result)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to get quote')
-    } finally {
-      setLoading(false)
+      return BigInt(Math.floor(parseFloat(amount) * 1e18))
+    } catch {
+      return 0n
     }
+  }, [amount])
+
+  // Use the swap hook with polling disabled - we'll refetch manually
+  const { state, refetch } = useEkuboSwap({
+    sellToken: tokenFrom,
+    buyToken: tokenTo,
+    amount: amountWei,
+    enabled: false, // Don't auto-poll, we'll fetch manually
+  })
+
+  const handleGetQuote = () => {
+    refetch()
   }
 
   const formatAmount = (value: bigint, decimals: number = 18) => {
@@ -46,8 +40,8 @@ export function QuoteExample() {
     <div className="card">
       <h2>Get Swap Quote</h2>
       <p>
-        Fetch a quote for swapping tokens. The SDK handles token resolution by
-        symbol or address.
+        Fetch a quote for swapping tokens using the <code>useEkuboSwap</code> hook.
+        The SDK handles token resolution by symbol or address.
       </p>
 
       <div className="form-row">
@@ -94,31 +88,32 @@ export function QuoteExample() {
       </div>
 
       <div className="button-group">
-        <button onClick={handleGetQuote} disabled={loading}>
-          {loading ? 'Getting Quote...' : 'Get Quote'}
+        <button onClick={handleGetQuote} disabled={state.loading}>
+          {state.loading ? 'Getting Quote...' : 'Get Quote'}
         </button>
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {state.error && <p className="error">{state.error.message}</p>}
+      {state.insufficientLiquidity && <p className="error">Insufficient liquidity for this swap</p>}
 
-      {quote && (
+      {state.quote && (
         <div className="quote-result">
           <h3>Quote Result</h3>
           <p>
-            <strong>Amount Out:</strong> {formatAmount(quote.total)} {tokenTo}
+            <strong>Amount Out:</strong> {formatAmount(state.quote.total)} {tokenTo}
           </p>
           <p>
-            <strong>Price Impact:</strong> {(quote.impact * 100).toFixed(4)}%
+            <strong>Price Impact:</strong> {(state.quote.impact * 100).toFixed(4)}%
           </p>
           <p>
-            <strong>Route Splits:</strong> {quote.splits.length}
+            <strong>Route Splits:</strong> {state.quote.splits.length}
           </p>
 
           <details>
             <summary>Raw Quote Data</summary>
             <pre>
               {JSON.stringify(
-                quote,
+                state.quote,
                 (_, v) => (typeof v === 'bigint' ? v.toString() : v),
                 2
               )}
@@ -130,19 +125,31 @@ export function QuoteExample() {
       <div style={{ marginTop: '1.5rem' }}>
         <h3>Code Example</h3>
         <pre style={{ background: '#2a2a2a', padding: '1rem', borderRadius: '8px', overflow: 'auto' }}>
-{`import { createEkuboClient } from 'ekubo-sdk'
+{`import { useEkuboSwap } from 'ekubo-sdk/react'
 
-const ekubo = createEkuboClient({ chain: 'mainnet' })
+function QuoteComponent() {
+  const { state, refetch } = useEkuboSwap({
+    sellToken: 'ETH',
+    buyToken: 'USDC',
+    amount: BigInt(1e17), // 0.1 ETH in wei
+    enabled: false, // Manual fetch only
+  })
 
-// Get a swap quote using token symbols
-const quote = await ekubo.getQuote({
-  amount: BigInt(1e17), // 0.1 ETH in wei
-  tokenFrom: 'ETH',
-  tokenTo: 'USDC',
-})
+  return (
+    <div>
+      <button onClick={refetch} disabled={state.loading}>
+        Get Quote
+      </button>
 
-console.log('Amount out:', quote.total)
-console.log('Price impact:', quote.impact)`}
+      {state.quote && (
+        <div>
+          <p>Amount out: {state.quote.total}</p>
+          <p>Price impact: {state.quote.impact}</p>
+        </div>
+      )}
+    </div>
+  )
+}`}
         </pre>
       </div>
     </div>

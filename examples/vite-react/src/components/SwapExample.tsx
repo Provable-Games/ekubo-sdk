@@ -1,69 +1,60 @@
-import { useState } from 'react'
-import { useEkubo } from '../hooks/useEkubo'
+import { useState, useMemo } from 'react'
+import { useEkuboSwap } from 'ekubo-sdk/react'
 import { useWallet } from '../hooks/useWallet'
-import { MAINNET_TOKENS, type SwapQuote, type SwapCallsResult } from 'ekubo-sdk'
+import { MAINNET_TOKENS } from 'ekubo-sdk'
 
 export function SwapExample() {
-  const ekubo = useEkubo()
   const { address, wallet, isConnecting, connectWallet } = useWallet()
   const [tokenFrom, setTokenFrom] = useState('ETH')
   const [tokenTo, setTokenTo] = useState('USDC')
   const [amount, setAmount] = useState('0.01')
-  const [slippage, setSlippage] = useState('0.5')
-  const [quote, setQuote] = useState<SwapQuote | null>(null)
-  const [calls, setCalls] = useState<SwapCallsResult | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [slippage, setSlippage] = useState('5')
   const [executing, setExecuting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [executeError, setExecuteError] = useState<string | null>(null)
 
-  const handleGetQuoteAndCalls = async () => {
-    setLoading(true)
-    setError(null)
-    setQuote(null)
-    setCalls(null)
-    setTxHash(null)
-
+  // Convert amount to wei
+  const amountWei = useMemo(() => {
     try {
-      const amountWei = BigInt(Math.floor(parseFloat(amount) * 1e18))
-
-      // First get the quote
-      const quoteResult = await ekubo.getQuote({
-        amount: amountWei,
-        tokenFrom,
-        tokenTo,
-      })
-      setQuote(quoteResult)
-
-      // Calculate minimum received with slippage
-      const slippageBps = BigInt(Math.floor(parseFloat(slippage) * 100))
-      const minimumReceived =
-        quoteResult.total - (quoteResult.total * slippageBps) / 10000n
-
-      // Generate swap calls
-      const swapCalls = ekubo.generateSwapCalls({
-        sellToken: tokenFrom,
-        buyToken: tokenTo,
-        quote: quoteResult,
-        minimumReceived,
-      })
-      setCalls(swapCalls)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to prepare swap')
-    } finally {
-      setLoading(false)
+      return BigInt(Math.floor(parseFloat(amount) * 1e18))
+    } catch {
+      return 0n
     }
-  }
+  }, [amount])
+
+  // Convert slippage to bigint
+  const slippagePercent = useMemo(() => {
+    try {
+      return BigInt(Math.floor(parseFloat(slippage)))
+    } catch {
+      return 5n
+    }
+  }, [slippage])
+
+  // Use the swap hook - it automatically polls for quotes
+  const { state, generateCalls } = useEkuboSwap({
+    sellToken: tokenFrom,
+    buyToken: tokenTo,
+    amount: amountWei,
+    enabled: amountWei > 0n && tokenFrom !== tokenTo,
+    pollingInterval: 5000,
+    defaultSlippagePercent: slippagePercent,
+  })
 
   const handleExecuteSwap = async () => {
-    if (!wallet || !calls) return
+    if (!wallet) return
+
+    const calls = generateCalls(slippagePercent)
+    if (!calls) {
+      setExecuteError('Failed to generate swap calls')
+      return
+    }
 
     setExecuting(true)
-    setError(null)
+    setExecuteError(null)
     setTxHash(null)
 
     try {
-      // Execute the swap using the wallet
       const result = await wallet.request({
         type: 'wallet_addInvokeTransaction',
         params: {
@@ -77,7 +68,7 @@ export function SwapExample() {
 
       setTxHash(result.transaction_hash)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to execute swap')
+      setExecuteError(err instanceof Error ? err.message : 'Failed to execute swap')
     } finally {
       setExecuting(false)
     }
@@ -94,12 +85,14 @@ export function SwapExample() {
   const shortenAddress = (addr: string) =>
     `${addr.slice(0, 6)}...${addr.slice(-4)}`
 
+  const calls = state.quote ? generateCalls(slippagePercent) : null
+
   return (
     <div className="card">
       <h2>Execute Swap</h2>
       <p>
-        Generate swap calls and execute them with a connected wallet. This
-        example shows the full swap flow.
+        Use <code>useEkuboSwap</code> with automatic polling and execute swaps
+        with a connected wallet.
       </p>
 
       <div className="wallet-section">
@@ -164,23 +157,23 @@ export function SwapExample() {
             type="text"
             value={slippage}
             onChange={(e) => setSlippage(e.target.value)}
-            placeholder="0.5"
+            placeholder="5"
           />
         </div>
       </div>
 
       <div className="button-group">
-        <button onClick={handleGetQuoteAndCalls} disabled={loading}>
-          {loading ? 'Preparing...' : 'Prepare Swap'}
-        </button>
-        {calls && address && (
-          <button onClick={handleExecuteSwap} disabled={executing}>
+        {state.loading && <span style={{ color: '#888' }}>Fetching quote...</span>}
+        {state.quote && address && (
+          <button onClick={handleExecuteSwap} disabled={executing || !calls}>
             {executing ? 'Executing...' : 'Execute Swap'}
           </button>
         )}
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {state.error && <p className="error">{state.error.message}</p>}
+      {state.insufficientLiquidity && <p className="error">Insufficient liquidity</p>}
+      {executeError && <p className="error">{executeError}</p>}
       {txHash && (
         <p className="success">
           Transaction submitted:{' '}
@@ -195,14 +188,14 @@ export function SwapExample() {
         </p>
       )}
 
-      {quote && (
+      {state.quote && (
         <div className="quote-result">
-          <h3>Quote</h3>
+          <h3>Live Quote (auto-refreshing)</h3>
           <p>
-            <strong>You receive:</strong> ~{formatAmount(quote.total)} {tokenTo}
+            <strong>You receive:</strong> ~{formatAmount(state.quote.total)} {tokenTo}
           </p>
           <p>
-            <strong>Price Impact:</strong> {(quote.impact * 100).toFixed(4)}%
+            <strong>Price Impact:</strong> {(state.quote.impact * 100).toFixed(4)}%
           </p>
         </div>
       )}
@@ -231,39 +224,46 @@ export function SwapExample() {
       <div style={{ marginTop: '1.5rem' }}>
         <h3>Code Example</h3>
         <pre style={{ background: '#2a2a2a', padding: '1rem', borderRadius: '8px', overflow: 'auto' }}>
-{`import { createEkuboClient } from 'ekubo-sdk'
+{`import { useEkuboSwap } from 'ekubo-sdk/react'
 
-const ekubo = createEkuboClient({ chain: 'mainnet' })
+function SwapComponent() {
+  const { state, generateCalls } = useEkuboSwap({
+    sellToken: 'ETH',
+    buyToken: 'USDC',
+    amount: BigInt(1e16), // 0.01 ETH
+    pollingInterval: 5000, // Refresh every 5s
+  })
 
-// 1. Get a quote
-const quote = await ekubo.getQuote({
-  amount: BigInt(1e16), // 0.01 ETH
-  tokenFrom: 'ETH',
-  tokenTo: 'USDC',
-})
+  const handleSwap = async () => {
+    // Generate calls with 5% slippage
+    const calls = generateCalls(5n)
+    if (!calls) return
 
-// 2. Calculate minimum with slippage (0.5%)
-const minimumReceived = quote.total - (quote.total * 50n) / 10000n
+    // Execute with wallet
+    await wallet.request({
+      type: 'wallet_addInvokeTransaction',
+      params: {
+        calls: calls.allCalls.map(c => ({
+          contract_address: c.contractAddress,
+          entry_point: c.entrypoint,
+          calldata: c.calldata,
+        })),
+      },
+    })
+  }
 
-// 3. Generate swap calls
-const calls = ekubo.generateSwapCalls({
-  sellToken: 'ETH',
-  buyToken: 'USDC',
-  quote,
-  minimumReceived,
-})
-
-// 4. Execute with wallet (e.g., starknetkit)
-await wallet.request({
-  type: 'wallet_addInvokeTransaction',
-  params: {
-    calls: calls.allCalls.map(c => ({
-      contract_address: c.contractAddress,
-      entry_point: c.entrypoint,
-      calldata: c.calldata,
-    })),
-  },
-})`}
+  return (
+    <div>
+      {state.loading && <p>Loading quote...</p>}
+      {state.quote && (
+        <>
+          <p>You receive: {state.quote.total}</p>
+          <button onClick={handleSwap}>Swap</button>
+        </>
+      )}
+    </div>
+  )
+}`}
         </pre>
       </div>
     </div>
