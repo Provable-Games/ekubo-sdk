@@ -1,5 +1,5 @@
 {
-  "name": "ekubo-sdk",
+  "name": "@provable-games/ekubo-sdk",
   "version": "0.1.0",
   "description": "Standalone TypeScript SDK for Ekubo DEX routing and quotes on Starknet",
   "type": "module",
@@ -42,8 +42,21 @@
   ],
   "author": "Provable Games",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Provable-Games/ekubo-sdk.git"
+  },
+  "homepage": "https://github.com/Provable-Games/ekubo-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/Provable-Games/ekubo-sdk/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
     "eslint": "^8.57.0",
     "tsup": "^8.1.0",
     "typescript": "^5.4.5",
