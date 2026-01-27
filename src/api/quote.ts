@@ -55,14 +55,17 @@ export async function fetchSwapQuote(
   const config = { ...DEFAULT_FETCH_CONFIG, ...fetchConfig };
   const fetchFn = config.fetch;
 
-  // Negative amount to specify exact amount received
-  const receivedAmount = `-${amount.toString()}`;
-
   // Normalize addresses
   const normalizedTokenFrom = normalizeAddress(tokenFrom);
   const normalizedTokenTo = normalizeAddress(tokenTo);
 
-  const url = `${API_URLS.QUOTER}/${chainId}/${receivedAmount}/${normalizedTokenFrom}/${normalizedTokenTo}`;
+  // Build URL based on amount sign:
+  // - Positive: exact input, selling tokenFrom to get tokenTo → URL: amount/tokenFrom/tokenTo
+  // - Negative: exact output, want tokenTo, paying with tokenFrom → URL: amount/tokenTo/tokenFrom
+  const isExactOutput = amount < 0n;
+  const url = isExactOutput
+    ? `${API_URLS.QUOTER}/${chainId}/${amount.toString()}/${normalizedTokenTo}/${normalizedTokenFrom}`
+    : `${API_URLS.QUOTER}/${chainId}/${amount.toString()}/${normalizedTokenFrom}/${normalizedTokenTo}`;
 
   let lastError: Error | null = null;
 
