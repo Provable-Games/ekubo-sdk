@@ -141,6 +141,10 @@ export function useEkuboQuotes({
     });
 
     // Fetch quotes in parallel
+    // Use negative amount for exact output - we want to receive `amount` of buyToken
+    // and need to know how much of each sellToken to send
+    const exactOutputAmount = amount > 0n ? -amount : amount;
+
     const fetchPromises = sellTokens
       .filter((sellToken) => sellToken.toLowerCase() !== buyToken.toLowerCase())
       .map(async (sellToken) => {
@@ -149,7 +153,7 @@ export function useEkuboQuotes({
 
         try {
           const quote = await client.getQuote({
-            amount,
+            amount: exactOutputAmount,
             tokenFrom: sellToken,
             tokenTo: buyToken,
             signal: abortController.signal,

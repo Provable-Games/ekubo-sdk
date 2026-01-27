@@ -6,7 +6,7 @@ import './index.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <EkuboProvider config={{ chain: 'mainnet' }}>
+    <EkuboProvider>
       <App />
     </EkuboProvider>
   </StrictMode>,

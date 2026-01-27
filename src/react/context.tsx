@@ -23,13 +23,16 @@ export interface EkuboProviderProps {
 /**
  * Provider component for EkuboClient
  *
+ * Defaults to mainnet if no config is provided. Chain can also be
+ * specified per-hook via the `config` option.
+ *
  * @example
  * ```tsx
  * import { EkuboProvider } from '@provable-games/ekubo-sdk/react';
  *
  * function App() {
  *   return (
- *     <EkuboProvider config={{ chain: 'mainnet' }}>
+ *     <EkuboProvider>
  *       <YourApp />
  *     </EkuboProvider>
  *   );
