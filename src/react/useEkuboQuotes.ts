@@ -39,7 +39,9 @@ export interface UseEkuboQuotesProps {
   amount: bigint;
   /** Whether to enable quote fetching (default: true) */
   enabled?: boolean;
-  /** Polling interval in ms (default: 30000 - 30 seconds) */
+  /** Whether to continuously poll for quote updates (default: false) */
+  poll?: boolean;
+  /** Polling interval in ms when poll is true (default: 30000 - 30 seconds) */
   pollingInterval?: number;
   /** Client config (optional if using EkuboProvider) */
   config?: EkuboClientConfig;
@@ -92,6 +94,7 @@ export function useEkuboQuotes({
   buyToken,
   amount,
   enabled = true,
+  poll = false,
   pollingInterval = 30000,
   config,
 }: UseEkuboQuotesProps): UseEkuboQuotesResult {
@@ -116,7 +119,7 @@ export function useEkuboQuotes({
     );
   }, [buyToken, amount, sellTokens.length]);
 
-  const shouldPoll = enabled && canFetch;
+  const shouldFetch = enabled && canFetch;
 
   // The actual fetch implementation - depends on current values
   const fetchAllQuotesImpl = useCallback(async () => {
@@ -212,22 +215,24 @@ export function useEkuboQuotes({
     return fetchAllQuotesRef.current();
   }, []);
 
-  // Set up polling - depends on stable wrapper + actual value changes via keys
+  // Fetch quotes and optionally set up polling
   useEffect(() => {
     if (pollerRef.current) {
       clearInterval(pollerRef.current);
       pollerRef.current = null;
     }
 
-    if (!shouldPoll) {
+    if (!shouldFetch) {
       return;
     }
 
     // Fetch immediately
     fetchAllQuotes();
 
-    // Set up polling interval
-    pollerRef.current = setInterval(fetchAllQuotes, pollingInterval);
+    // Only set up polling interval if poll prop is true
+    if (poll) {
+      pollerRef.current = setInterval(fetchAllQuotes, pollingInterval);
+    }
 
     return () => {
       if (pollerRef.current) {
@@ -238,12 +243,13 @@ export function useEkuboQuotes({
       abortControllersRef.current.clear();
     };
     // fetchAllQuotes is stable (empty deps), so effect only re-runs when:
-    // - shouldPoll changes (enabled state)
+    // - shouldFetch changes (enabled state)
+    // - poll changes (polling preference)
     // - pollingInterval changes
     // - sellTokensKey changes (token list actually changed)
     // - buyToken changes
     // - amount changes
-  }, [shouldPoll, fetchAllQuotes, pollingInterval, sellTokensKey, buyToken, amount]);
+  }, [shouldFetch, poll, fetchAllQuotes, pollingInterval, sellTokensKey, buyToken, amount]);
 
   const isLoading = useMemo(() => {
     return Object.values(quotes).some((q) => q.loading);
