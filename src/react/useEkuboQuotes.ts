@@ -102,7 +102,7 @@ export function useEkuboQuotes({
   const pollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
-  // Stable key for sellTokens
+  // Stable key for sellTokens - used to detect actual changes in token list
   const sellTokensKey = useMemo(
     () => JSON.stringify([...sellTokens].sort()),
     [sellTokens]
@@ -118,7 +118,8 @@ export function useEkuboQuotes({
 
   const shouldPoll = enabled && canFetch;
 
-  const fetchAllQuotes = useCallback(async () => {
+  // The actual fetch implementation - depends on current values
+  const fetchAllQuotesImpl = useCallback(async () => {
     if (!canFetch || !buyToken) return;
 
     // Cancel any pending requests
@@ -201,7 +202,17 @@ export function useEkuboQuotes({
     });
   }, [canFetch, buyToken, sellTokens, amount, client]);
 
-  // Set up polling
+  // Keep ref updated with latest implementation (synchronous update)
+  const fetchAllQuotesRef = useRef(fetchAllQuotesImpl);
+  fetchAllQuotesRef.current = fetchAllQuotesImpl;
+
+  // Stable wrapper that always calls the latest implementation
+  // This breaks the circular dependency between the callback and the effect
+  const fetchAllQuotes = useCallback(async () => {
+    return fetchAllQuotesRef.current();
+  }, []);
+
+  // Set up polling - depends on stable wrapper + actual value changes via keys
   useEffect(() => {
     if (pollerRef.current) {
       clearInterval(pollerRef.current);
@@ -226,7 +237,13 @@ export function useEkuboQuotes({
       abortControllersRef.current.forEach((controller) => controller.abort());
       abortControllersRef.current.clear();
     };
-  }, [shouldPoll, fetchAllQuotes, pollingInterval, sellTokensKey]);
+    // fetchAllQuotes is stable (empty deps), so effect only re-runs when:
+    // - shouldPoll changes (enabled state)
+    // - pollingInterval changes
+    // - sellTokensKey changes (token list actually changed)
+    // - buyToken changes
+    // - amount changes
+  }, [shouldPoll, fetchAllQuotes, pollingInterval, sellTokensKey, buyToken, amount]);
 
   const isLoading = useMemo(() => {
     return Object.values(quotes).some((q) => q.loading);
