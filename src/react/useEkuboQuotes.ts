@@ -104,7 +104,6 @@ export function useEkuboQuotes({
   const [quotes, setQuotes] = useState<QuotesMap>({});
   const pollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
-  const hasFetchedRef = useRef(false);
 
   // Stable key for sellTokens - used to detect actual changes in token list
   const sellTokensKey = useMemo(
@@ -216,11 +215,6 @@ export function useEkuboQuotes({
     return fetchAllQuotesRef.current();
   }, []);
 
-  // Track previous values to detect actual changes
-  const prevSellTokensKeyRef = useRef<string | null>(null);
-  const prevBuyTokenRef = useRef<string | null>(null);
-  const prevAmountRef = useRef<bigint | null>(null);
-
   // Fetch quotes and optionally set up polling
   useEffect(() => {
     if (pollerRef.current) {
@@ -229,31 +223,15 @@ export function useEkuboQuotes({
     }
 
     if (!shouldFetch) {
-      hasFetchedRef.current = false;
       return;
     }
 
-    // Check if key inputs actually changed
-    const inputsChanged =
-      prevSellTokensKeyRef.current !== sellTokensKey ||
-      prevBuyTokenRef.current !== buyToken ||
-      prevAmountRef.current !== amount;
+    // Fetch immediately
+    fetchAllQuotes();
 
-    // Update previous values
-    prevSellTokensKeyRef.current = sellTokensKey;
-    prevBuyTokenRef.current = buyToken;
-    prevAmountRef.current = amount;
-
-    // If polling, always fetch and set up interval
+    // Set up polling interval if poll is enabled
     if (poll) {
-      fetchAllQuotes();
       pollerRef.current = setInterval(fetchAllQuotes, pollingInterval);
-    } else {
-      // If not polling, only fetch once OR when inputs actually change
-      if (!hasFetchedRef.current || inputsChanged) {
-        hasFetchedRef.current = true;
-        fetchAllQuotes();
-      }
     }
 
     return () => {
