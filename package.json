@@ -1,6 +1,6 @@
 {
   "name": "@provable-games/ekubo-sdk",
-  "version": "0.1.18-debug",
+  "version": "0.1.17",
   "description": "Standalone TypeScript SDK for Ekubo DEX routing and quotes on Starknet",
   "type": "module",
   "main": "./dist/index.cjs",

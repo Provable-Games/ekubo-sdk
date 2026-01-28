@@ -217,16 +217,6 @@ export function useEkuboQuotes({
 
   // Fetch quotes and optionally set up polling
   useEffect(() => {
-    console.log('[useEkuboQuotes] Effect running', {
-      shouldFetch,
-      poll,
-      pollingInterval,
-      sellTokensKey,
-      buyToken: buyToken?.slice(0, 10),
-      amount: amount?.toString(),
-      timestamp: new Date().toISOString(),
-    });
-
     if (pollerRef.current) {
       clearInterval(pollerRef.current);
       pollerRef.current = null;
@@ -237,17 +227,14 @@ export function useEkuboQuotes({
     }
 
     // Fetch immediately
-    console.log('[useEkuboQuotes] Fetching quotes...');
     fetchAllQuotes();
 
     // Set up polling interval if poll is enabled
     if (poll) {
-      console.log('[useEkuboQuotes] Setting up polling interval:', pollingInterval);
       pollerRef.current = setInterval(fetchAllQuotes, pollingInterval);
     }
 
     return () => {
-      console.log('[useEkuboQuotes] Cleanup running');
       if (pollerRef.current) {
         clearInterval(pollerRef.current);
         pollerRef.current = null;
