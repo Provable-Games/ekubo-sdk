@@ -216,10 +216,10 @@ export function useEkuboQuotes({
     return fetchAllQuotesRef.current();
   }, []);
 
-  // Reset hasFetched when key inputs change
-  useEffect(() => {
-    hasFetchedRef.current = false;
-  }, [sellTokensKey, buyToken, amount]);
+  // Track previous values to detect actual changes
+  const prevSellTokensKeyRef = useRef<string | null>(null);
+  const prevBuyTokenRef = useRef<string | null>(null);
+  const prevAmountRef = useRef<bigint | null>(null);
 
   // Fetch quotes and optionally set up polling
   useEffect(() => {
@@ -233,13 +233,24 @@ export function useEkuboQuotes({
       return;
     }
 
+    // Check if key inputs actually changed
+    const inputsChanged =
+      prevSellTokensKeyRef.current !== sellTokensKey ||
+      prevBuyTokenRef.current !== buyToken ||
+      prevAmountRef.current !== amount;
+
+    // Update previous values
+    prevSellTokensKeyRef.current = sellTokensKey;
+    prevBuyTokenRef.current = buyToken;
+    prevAmountRef.current = amount;
+
     // If polling, always fetch and set up interval
     if (poll) {
       fetchAllQuotes();
       pollerRef.current = setInterval(fetchAllQuotes, pollingInterval);
     } else {
-      // If not polling, only fetch once
-      if (!hasFetchedRef.current) {
+      // If not polling, only fetch once OR when inputs actually change
+      if (!hasFetchedRef.current || inputsChanged) {
         hasFetchedRef.current = true;
         fetchAllQuotes();
       }
