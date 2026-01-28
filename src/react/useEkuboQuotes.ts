@@ -104,6 +104,7 @@ export function useEkuboQuotes({
   const [quotes, setQuotes] = useState<QuotesMap>({});
   const pollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const hasFetchedRef = useRef(false);
 
   // Stable key for sellTokens - used to detect actual changes in token list
   const sellTokensKey = useMemo(
@@ -215,6 +216,11 @@ export function useEkuboQuotes({
     return fetchAllQuotesRef.current();
   }, []);
 
+  // Reset hasFetched when key inputs change
+  useEffect(() => {
+    hasFetchedRef.current = false;
+  }, [sellTokensKey, buyToken, amount]);
+
   // Fetch quotes and optionally set up polling
   useEffect(() => {
     if (pollerRef.current) {
@@ -223,15 +229,20 @@ export function useEkuboQuotes({
     }
 
     if (!shouldFetch) {
+      hasFetchedRef.current = false;
       return;
     }
 
-    // Fetch immediately
-    fetchAllQuotes();
-
-    // Only set up polling interval if poll prop is true
+    // If polling, always fetch and set up interval
     if (poll) {
+      fetchAllQuotes();
       pollerRef.current = setInterval(fetchAllQuotes, pollingInterval);
+    } else {
+      // If not polling, only fetch once
+      if (!hasFetchedRef.current) {
+        hasFetchedRef.current = true;
+        fetchAllQuotes();
+      }
     }
 
     return () => {
@@ -242,13 +253,6 @@ export function useEkuboQuotes({
       abortControllersRef.current.forEach((controller) => controller.abort());
       abortControllersRef.current.clear();
     };
-    // fetchAllQuotes is stable (empty deps), so effect only re-runs when:
-    // - shouldFetch changes (enabled state)
-    // - poll changes (polling preference)
-    // - pollingInterval changes
-    // - sellTokensKey changes (token list actually changed)
-    // - buyToken changes
-    // - amount changes
   }, [shouldFetch, poll, fetchAllQuotes, pollingInterval, sellTokensKey, buyToken, amount]);
 
   const isLoading = useMemo(() => {
